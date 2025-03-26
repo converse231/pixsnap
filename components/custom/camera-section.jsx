@@ -12,6 +12,8 @@ import {
   Palette,
   User,
   Download,
+  Repeat,
+  Loader,
 } from "lucide-react";
 
 function CameraSection() {
@@ -25,6 +27,8 @@ function CameraSection() {
   const [capturedPhotos, setCapturedPhotos] = useState([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [photoSessionActive, setPhotoSessionActive] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [useFrontCamera, setUseFrontCamera] = useState(false);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const canvasRef = useRef(null);
@@ -48,6 +52,24 @@ function CameraSection() {
   const getCurrentBgColor = () => {
     return stripBgColors.find((c) => c.id === stripBgColor) || stripBgColors[0];
   };
+
+  // Check if device is mobile and set state accordingly
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileDevice =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        );
+      setIsMobile(isMobileDevice);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => {
+      window.removeEventListener("resize", checkMobile);
+    };
+  }, []);
 
   // Handle cleanup when component unmounts
   useEffect(() => {
@@ -82,15 +104,23 @@ function CameraSection() {
       setLoading(true);
 
       console.log("Requesting camera access...");
-      // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({
+
+      // Set appropriate camera constraints based on device
+      const constraints = {
         video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          facingMode: isMobile
+            ? useFrontCamera
+              ? "user"
+              : "environment"
+            : "user",
+          width: { ideal: isMobile ? 720 : 1280 },
+          height: { ideal: isMobile ? 1280 : 720 },
         },
         audio: false,
-      });
+      };
+
+      // Try to access camera with these constraints
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       console.log("Camera access granted, setting up stream...");
       // Store stream reference for cleanup
@@ -114,6 +144,39 @@ function CameraSection() {
       setLoading(false);
     } catch (error) {
       console.error("Error accessing camera:", error);
+
+      // If initial attempt fails with environment camera on mobile, try user-facing camera
+      if (isMobile && error.name === "OverconstrainedError") {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: useFrontCamera ? "environment" : "user", // Try opposite camera
+              width: { ideal: 720 },
+              height: { ideal: 1280 },
+            },
+            audio: false,
+          });
+
+          streamRef.current = stream;
+
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.srcObject = stream;
+              console.log("Video source object set (fallback camera)");
+              setUseFrontCamera(!useFrontCamera); // Update camera direction state
+              setCameraActive(true);
+              setLoading(false);
+            } else {
+              throw new Error("Video ref is null");
+            }
+          }, 100);
+
+          return;
+        } catch (fallbackError) {
+          console.error("Fallback camera also failed:", fallbackError);
+        }
+      }
+
       setCameraError(
         error.name === "NotAllowedError"
           ? "Camera access denied. Please allow camera access to use this feature."
@@ -126,6 +189,23 @@ function CameraSection() {
       setCameraActive(false);
       setLoading(false);
     }
+  };
+
+  const switchCamera = async () => {
+    if (!isMobile) return;
+
+    // Toggle the camera direction
+    setUseFrontCamera((prev) => !prev);
+
+    // Stop the current camera stream
+    if (streamRef.current) {
+      const tracks = streamRef.current.getTracks();
+      tracks.forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    // Restart camera with new direction
+    startCamera();
   };
 
   const stopCamera = () => {
@@ -585,12 +665,12 @@ function CameraSection() {
           backgroundColor: currentColor.color,
           boxShadow: "0 4px 8px rgba(0,0,0,0.2)",
           width: "100%",
-          maxWidth: "230px",
+          maxWidth: "100%",
           aspectRatio: "9/30",
         }}
       >
         {/* Photo Frames */}
-        <div className="photo-frames flex-1 flex flex-col justify-around gap-2 p-3">
+        <div className="photo-frames flex-1 flex flex-col justify-around gap-1 sm:gap-2 p-2 sm:p-3">
           {Array(4)
             .fill(0)
             .map((_, i) => (
@@ -607,7 +687,10 @@ function CameraSection() {
                   />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/30">
-                    <User size={18} className="text-gray-700/40" />
+                    <User
+                      size={12}
+                      className="sm:size-14 md:size-6 text-gray-700/40"
+                    />
                   </div>
                 )}
               </div>
@@ -615,9 +698,9 @@ function CameraSection() {
         </div>
 
         {/* Strip Footer */}
-        <div className="strip-footer text-center pb-4 pt-8 px-2 border-t-2 border-white/30">
+        <div className="strip-footer text-center pb-3 pt-6 sm:pb-4 sm:pt-8 px-2 border-t-2 border-white/30">
           <span className="text-white text-xs font-medium">PixSnap</span>
-          <p className="text-white text-xs font-medium">
+          <p className="text-white text-[10px] sm:text-xs font-medium">
             {new Date().toLocaleDateString()}
           </p>
         </div>
@@ -626,10 +709,10 @@ function CameraSection() {
   };
 
   return (
-    <div className="max-w-8xl mx-auto mt-8">
-      <div className="flex flex-wrap md:flex-nowrap gap-6">
+    <div className="w-full max-w-8xl mx-auto px-3 md:px-0 sm:px-4 mt-4 sm:mt-8">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Camera Preview Section */}
-        <div className="w-full md:w-[80%] bg-black rounded-xl overflow-hidden border-4 border-white/20 shadow-2xl flex flex-col">
+        <div className="w-full lg:w-[75%] bg-black rounded-xl overflow-hidden border-4 border-white/20 shadow-2xl flex flex-col">
           <div className="relative flex-1 aspect-video flex items-center justify-center">
             {/* Video Element for Camera Stream */}
             {cameraActive && (
@@ -655,12 +738,12 @@ function CameraSection() {
             {/* Countdown Display */}
             {countdownActive && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                <div className="text-white text-9xl font-bold animate-pulse bg-black/40 w-40 h-40 rounded-full flex items-center justify-center">
+                <div className="text-white text-5xl sm:text-7xl md:text-9xl font-bold animate-pulse bg-black/40 w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full flex items-center justify-center">
                   {countdown}
                 </div>
                 {photoSessionActive && (
-                  <div className="absolute top-6 left-0 right-0 text-center">
-                    <span className="bg-purple-600 px-4 py-2 rounded-full text-white font-bold">
+                  <div className="absolute top-4 sm:top-6 left-0 right-0 text-center">
+                    <span className="bg-purple-600 px-3 py-1 sm:px-4 sm:py-2 rounded-full text-white text-sm sm:text-base font-bold">
                       Photo {currentPhotoIndex + 1} of 4
                     </span>
                   </div>
@@ -670,17 +753,21 @@ function CameraSection() {
 
             {/* Camera Placeholder - shown when camera is not active */}
             {!cameraActive && !loading && (
-              <div className="flex flex-col items-center justify-center text-gray-500">
-                <Camera size={64} stroke={1.5} />
-                <p className="mt-4 text-lg mb-6">Camera Preview</p>
+              <div className="flex flex-col items-center justify-center text-gray-500 p-4 text-center">
+                <p className="mt-3 sm:mt-4 text-base sm:text-lg mb-4 sm:mb-6">
+                  Camera Preview
+                </p>
 
                 {cameraError ? (
-                  <div className="text-center mb-4">
+                  <div className="text-center mb-4 px-2">
                     <div className="flex items-center justify-center text-red-500 mb-2">
-                      <XCircle size={24} className="mr-2" />
+                      <XCircle
+                        size={18}
+                        className="sm:size-20 md:size-22 mr-2"
+                      />
                       <span>Camera Error</span>
                     </div>
-                    <p className="text-red-400 text-sm max-w-md px-4">
+                    <p className="text-red-400 text-xs sm:text-sm max-w-md px-2 sm:px-4">
                       {cameraError}
                     </p>
                   </div>
@@ -688,12 +775,12 @@ function CameraSection() {
 
                 {/* Camera Control Button */}
                 <motion.button
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-8 rounded-full flex items-center justify-center gap-2 shadow-lg"
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 sm:py-3 px-6 sm:px-8 rounded-full flex items-center justify-center gap-2 shadow-lg text-sm sm:text-base"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={toggleCamera}
                 >
-                  <Camera size={20} />
+                  <Camera className="sm:size-18 md:size-6" />
                   Turn on camera
                 </motion.button>
               </div>
@@ -703,33 +790,33 @@ function CameraSection() {
             {loading && (
               <div className="flex flex-col items-center justify-center text-gray-500">
                 <div className="animate-spin mb-4">
-                  <Video size={40} />
+                  <Loader size={24} className="sm:size-28 md:size-8" />
                 </div>
-                <p>Accessing camera...</p>
+                <p className="text-sm sm:text-base">Accessing camera...</p>
               </div>
             )}
 
             {/* Camera control buttons when active */}
             {cameraActive && !countdownActive && !photoSessionActive && (
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center space-x-4">
+              <div className="absolute bottom-4 sm:bottom-6 left-0 right-0 flex justify-center space-x-3 sm:space-x-4 px-2">
                 <motion.button
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-full flex items-center justify-center gap-2 shadow-lg"
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 sm:px-6 rounded-full flex items-center justify-center gap-1 sm:gap-2 shadow-lg text-xs sm:text-sm"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={startPhotoSession}
                 >
-                  <Camera size={18} />
-                  Take Photos
+                  <Camera size={14} className="sm:size-16 md:size-5" />
+                  <span>Take Photos</span>
                 </motion.button>
 
                 <motion.button
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-full flex items-center justify-center gap-2 shadow-lg"
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 sm:px-6 rounded-full flex items-center justify-center gap-1 sm:gap-2 shadow-lg text-xs sm:text-sm"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={toggleCamera}
                 >
-                  <XCircle size={18} />
-                  Turn off camera
+                  <XCircle size={14} className="sm:size-16 md:size-5" />
+                  <span>Turn off</span>
                 </motion.button>
               </div>
             )}
@@ -737,36 +824,53 @@ function CameraSection() {
             {/* Session Progress Indicator */}
             {photoSessionActive && !countdownActive && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                <div className="text-center">
-                  <div className="animate-pulse mb-4">
-                    <Camera size={48} className="text-white mx-auto" />
+                <div className="text-center px-4">
+                  <div className="animate-pulse mb-3 sm:mb-4">
+                    <Camera
+                      // size={28}
+                      className="sm:size-32 md:size-36 text-white mx-auto"
+                    />
                   </div>
-                  <p className="text-white text-lg font-medium">
+                  <p className="text-white text-sm sm:text-base md:text-lg font-medium">
                     Get ready for photo {currentPhotoIndex + 1} of 4
                   </p>
                 </div>
               </div>
             )}
 
+            {/* Camera switch button - only shown on mobile when camera is active */}
+            {cameraActive &&
+              isMobile &&
+              !countdownActive &&
+              !photoSessionActive && (
+                <button
+                  onClick={switchCamera}
+                  className="absolute top-3 left-3 bg-black/50 rounded-full p-2 text-white/80 hover:text-white transition z-10"
+                  title="Switch camera"
+                >
+                  <Repeat size={18} />
+                </button>
+              )}
+
             {/* Expand Button */}
-            <button className="absolute top-4 right-4 bg-black/50 rounded-md p-2 text-white/80 hover:text-white transition">
-              <Expand size={20} />
+            <button className="absolute top-3 sm:top-4 right-3 sm:right-4 bg-black/50 rounded-md p-1.5 sm:p-2 text-white/80 hover:text-white transition">
+              <Expand size={14} className="sm:size-16 md:size-5" />
             </button>
           </div>
 
           {/* Camera Settings */}
-          <div className="bg-white dark:bg-gray-100 px-4 py-3 flex flex-wrap items-center justify-between">
+          <div className="bg-white dark:bg-gray-100 px-3 py-2 sm:px-4 sm:py-3 flex flex-wrap gap-2 sm:gap-3 items-center justify-between">
             {/* Background Color */}
-            <div className="flex items-center gap-2">
-              <Palette size={18} className="text-gray-700" />
-              <span className="text-gray-700 text-sm font-medium">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Palette size={14} className="text-gray-700 hidden sm:inline" />
+              <span className="text-gray-700 text-xs sm:text-sm font-medium">
                 Background:
               </span>
               <div className="flex bg-gray-200 rounded-md">
                 {stripBgColors.map((color) => (
                   <button
                     key={color.id}
-                    className={`px-1 py-1 min-w-[2.5rem] text-sm rounded-md transition flex items-center justify-center ${
+                    className={`px-1 py-1 min-w-[1.8rem] sm:min-w-[2.5rem] text-xs sm:text-sm rounded-md transition flex items-center justify-center ${
                       stripBgColor === color.id
                         ? "ring-2 ring-purple-600 ring-offset-1 z-10"
                         : ""
@@ -785,16 +889,16 @@ function CameraSection() {
             </div>
 
             {/* Time Interval */}
-            <div className="flex items-center gap-2">
-              <Clock size={18} className="text-gray-700" />
-              <span className="text-gray-700 text-sm font-medium">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Clock size={14} className="text-gray-700 hidden sm:inline" />
+              <span className="text-gray-700 text-xs sm:text-sm font-medium">
                 Countdown:
               </span>
               <div className="flex bg-gray-200 rounded-md">
                 {intervalOptions.map((option) => (
                   <button
                     key={option.value}
-                    className={`px-3 py-1 text-sm rounded-md transition ${
+                    className={`px-2 sm:px-3 py-1 text-xs sm:text-sm rounded-md transition ${
                       photoInterval === option.value
                         ? "bg-purple-600 text-white"
                         : "text-gray-700 hover:bg-gray-300"
@@ -812,50 +916,57 @@ function CameraSection() {
             <div className="flex items-center">
               <button
                 onClick={resetPhotoBooth}
-                className="text-gray-700 text-sm font-medium bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-md flex items-center gap-1 transition-colors"
+                className="text-gray-700 text-xs sm:text-sm font-medium bg-gray-200 hover:bg-gray-300 px-2 sm:px-3 py-1 rounded-md flex items-center gap-1 transition-colors"
                 title="Reset photo booth to defaults"
               >
-                <XCircle size={16} className="text-red-500" />
-                Reset All
+                <XCircle
+                  size={12}
+                  className="sm:size-14 md:size-6 text-red-500"
+                />
+                <span>Reset</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Photo Strip Preview - Vertical Format */}
-        <div className="w-full md:w-[20%] min-w-[230px] flex flex-col items-center justify-start gap-4">
+        <div className="w-full lg:w-[25%] flex flex-row lg:flex-col items-center justify-center lg:justify-start gap-4 mt-2 sm:mt-3 lg:mt-0">
           {/* Photo Strip Preview Container */}
-          <div className="w-full flex justify-center">
+          <div className="w-full max-w-[180px] sm:max-w-[200px] lg:max-w-[230px] flex justify-center">
             {renderPhotoStripPreview()}
           </div>
 
-          {/* Status and Instructions */}
-          <div className="text-center w-full">
-            {capturedPhotos.length === 0 ? (
-              <p className="text-white/70 text-sm text-center">
-                Take photos to create your photo strip
-              </p>
-            ) : capturedPhotos.length < 4 ? (
-              <p className="text-white/70 text-sm">
-                {4 - capturedPhotos.length} more to complete
-              </p>
-            ) : (
-              <p className="text-white/70 text-sm">Photo strip complete!</p>
+          <div className="flex flex-col items-center gap-3 w-full max-w-[180px] sm:max-w-[200px] lg:max-w-[230px]">
+            {/* Status and Instructions */}
+            <div className="text-center w-full">
+              {capturedPhotos.length === 0 ? (
+                <p className="text-white/70 text-xs sm:text-sm text-center">
+                  Take photos to create your photo strip
+                </p>
+              ) : capturedPhotos.length < 4 ? (
+                <p className="text-white/70 text-xs sm:text-sm">
+                  {4 - capturedPhotos.length} more to complete
+                </p>
+              ) : (
+                <p className="text-white/70 text-xs sm:text-sm">
+                  Photo strip complete!
+                </p>
+              )}
+            </div>
+
+            {/* Download button (shown only when photo strip is complete) */}
+            {capturedPhotos.length >= 4 && (
+              <motion.button
+                className="w-full max-w-[230px] bg-purple-600 hover:bg-purple-700 text-white py-1.5 sm:py-2 px-3 sm:px-4 rounded-md flex items-center justify-center gap-2 text-xs sm:text-sm"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={downloadPhotoStrip}
+              >
+                <Download size={14} className="sm:size-6" />
+                Download Strip
+              </motion.button>
             )}
           </div>
-
-          {/* Download button (shown only when photo strip is complete) */}
-          {capturedPhotos.length >= 4 && (
-            <motion.button
-              className="w-full max-w-[230px] bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-md flex items-center justify-center gap-2"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={downloadPhotoStrip}
-            >
-              <Download size={16} />
-              Download Strip
-            </motion.button>
-          )}
         </div>
       </div>
     </div>
