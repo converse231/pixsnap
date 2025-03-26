@@ -52,7 +52,7 @@ function WelcomeBanner() {
     <AnimatePresence>
       {showBanner && (
         <motion.div
-          className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/30 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999999] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4"
           initial={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: "-100vh" }}
           transition={{
