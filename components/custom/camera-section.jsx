@@ -15,6 +15,7 @@ import {
   Repeat,
   Loader,
 } from "lucide-react";
+import * as htmlToImage from "html-to-image";
 
 function CameraSection() {
   const [cameraActive, setCameraActive] = useState(false);
@@ -33,6 +34,11 @@ function CameraSection() {
   const streamRef = useRef(null);
   const canvasRef = useRef(null);
   const countdownTimerRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [imageQuality, setImageQuality] = useState(0.8);
+  const [photoCache, setPhotoCache] = useState(new Map());
+  const photoStripRef = useRef(null);
 
   const stripBgColors = [
     { id: "pastel-pink", label: "Pink", color: "#FFD1DC" },
@@ -318,325 +324,191 @@ function CameraSection() {
     }, 1000);
   };
 
-  const capturePhoto = (photoIndex) => {
-    console.log(`capturePhoto called with index ${photoIndex}`);
-
-    if (!cameraActive || !videoRef.current || !canvasRef.current) {
-      console.log("Cannot capture - camera inactive or refs null");
-      setPhotoSessionActive(false);
-      return;
-    }
-
-    // Don't take more photos if we already have 4 or index is out of bounds
-    if (photoIndex >= 4) {
-      console.log("STOPPING: Photo index >= 4, ending session");
-      setPhotoSessionActive(false);
-      return;
-    }
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    // Set canvas dimensions to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    console.log(`Canvas set to ${canvas.width}x${canvas.height}`);
-
-    // Draw the current video frame to the canvas
-    const context = canvas.getContext("2d");
-
-    // Get the selected background color
-    const selectedColor = stripBgColors.find((c) => c.id === stripBgColor);
-    console.log(`Using background color: ${selectedColor?.color}`);
-
-    // Draw background color first
-    context.fillStyle = selectedColor ? selectedColor.color : "#FFFFFF";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Then draw the video frame
-    const margin = 20; // Margin around the photo
-    context.drawImage(
-      video,
-      margin,
-      margin,
-      canvas.width - margin * 2,
-      canvas.height - margin * 2
-    );
-
-    // Draw a frame or border
-    context.strokeStyle = "#FFFFFF";
-    context.lineWidth = 5;
-    context.strokeRect(
-      margin - 5,
-      margin - 5,
-      canvas.width - margin * 2 + 10,
-      canvas.height - margin * 2 + 10
-    );
-
-    // Convert to image data
-    const imageData = canvas.toDataURL("image/jpeg");
-    console.log(`Photo captured: (${imageData.substring(0, 30)}...)`);
-
-    // Add the photo to our array
-    setCapturedPhotos((prev) => {
-      const newPhotos = [...prev];
-      newPhotos[photoIndex] = imageData;
-      console.log(`Photo added to array at index ${photoIndex}`);
-      console.log(
-        `Array now contains ${newPhotos.filter((p) => p).length} photos`
-      );
-      return newPhotos;
-    });
-
-    // Move to next photo
-    const nextPhotoIndex = photoIndex + 1;
-    console.log(`Setting currentPhotoIndex to ${nextPhotoIndex}`);
-    setCurrentPhotoIndex(nextPhotoIndex);
-
-    if (nextPhotoIndex < 4) {
-      console.log(`Planning to take next photo at index ${nextPhotoIndex}`);
-      // We have more photos to take - wait a bit and start next countdown
-      const nextPhotoTimeout = setTimeout(() => {
-        console.log(
-          `Starting countdown for next photo at index ${nextPhotoIndex}`
-        );
-        if (cameraActive) {
-          startCountdown(nextPhotoIndex);
-        } else {
-          console.log("Camera became inactive, canceling next photo");
-          setPhotoSessionActive(false);
-        }
-      }, 1500);
-    } else {
-      // We're done with the session
-      console.log("COMPLETE: All 4 photos taken, ending session");
-      setPhotoSessionActive(false);
-    }
-  };
-
-  const downloadPhotoStrip = () => {
-    console.log("Download requested for photo strip");
-
+  const capturePhoto = async (photoIndex) => {
     try {
-      // Create a new canvas to combine all photos
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
+      console.log(`capturePhoto called with index ${photoIndex}`);
 
-      // Check if we have 4 photos
-      if (capturedPhotos.filter((p) => p).length < 4) {
-        console.log("Cannot download - need 4 photos");
-        alert("Cannot download - need 4 complete photos");
+      if (!cameraActive || !videoRef.current || !canvasRef.current) {
+        console.log("Cannot capture - camera inactive or refs null");
+        setPhotoSessionActive(false);
         return;
       }
 
-      // Get current background color
-      const currentColor = getCurrentBgColor();
-      const bgColor = currentColor.color;
+      // Don't take more photos if we already have 4 or index is out of bounds
+      if (photoIndex >= 4) {
+        console.log("STOPPING: Photo index >= 4, ending session");
+        setPhotoSessionActive(false);
+        return;
+      }
 
-      // Set dimensions to match the preview - use the same aspect ratio of 9/30
-      const stripWidth = 300;
-      const stripHeight = stripWidth * (30 / 9); // Maintain aspect ratio
-      canvas.width = stripWidth;
-      canvas.height = stripHeight;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
 
-      // Radius for rounded corners of entire strip
-      const cornerRadius = 12;
-      const borderWidth = 3; // White border thickness
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      console.log(`Canvas set to ${canvas.width}x${canvas.height}`);
 
-      // Helper function to draw rounded rectangle
-      const drawRoundedRect = (x, y, width, height, radius) => {
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + width - radius, y);
-        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-        ctx.lineTo(x + width, y + height - radius);
-        ctx.quadraticCurveTo(
-          x + width,
-          y + height,
-          x + width - radius,
-          y + height
-        );
-        ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
-      };
+      // Draw the current video frame to the canvas
+      const context = canvas.getContext("2d");
 
-      // Fill background with rounded corners
-      ctx.fillStyle = bgColor;
-      drawRoundedRect(0, 0, stripWidth, stripHeight, cornerRadius);
-      ctx.fill();
+      // Get the selected background color
+      const selectedColor = stripBgColors.find((c) => c.id === stripBgColor);
+      console.log(`Using background color: ${selectedColor?.color}`);
 
-      // Calculate sizes proportionally to match preview
-      const padding = stripWidth * 0.03; // 3% padding
-      const frameRadius = 6; // Rounded corners for frames
-      const headerFooterHeight = stripHeight * 0.15;
-      const photoAreaHeight = stripHeight - headerFooterHeight;
-      const photoFrameHeight = photoAreaHeight / 4.3; // Slightly taller frames
-      const photoGap = stripWidth * 0.02;
+      // Draw background color first
+      context.fillStyle = selectedColor ? selectedColor.color : "#FFFFFF";
+      context.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw photos first
-      const photoSection = {
-        x: padding,
-        y: headerFooterHeight * 0.2, // Top portion is header
-        width: stripWidth - padding * 2,
-        height: photoAreaHeight,
-      };
+      // Then draw the video frame
+      const margin = 20; // Margin around the photo
+      context.drawImage(
+        video,
+        margin,
+        margin,
+        canvas.width - margin * 2,
+        canvas.height - margin * 2
+      );
 
-      // Draw each photo synchronously
-      let loadedCount = 0;
-      const drawNextPhoto = (index) => {
-        if (index >= capturedPhotos.length || !capturedPhotos[index]) {
-          if (index >= capturedPhotos.length) {
-            // All photos processed, create download
-            finishDownload();
-          } else if (index < capturedPhotos.length) {
-            // Skip empty slots
-            drawNextPhoto(index + 1);
-          }
-          return;
-        }
+      // Draw a frame or border
+      context.strokeStyle = "#FFFFFF";
+      context.lineWidth = 5;
+      context.strokeRect(
+        margin - 5,
+        margin - 5,
+        canvas.width - margin * 2 + 10,
+        canvas.height - margin * 2 + 10
+      );
 
-        const img = document.createElement("img");
-        img.onload = () => {
-          // Position for this photo frame
-          const frameY = photoSection.y + index * (photoFrameHeight + photoGap);
+      // Add retry mechanism for failed captures
+      let retryCount = 0;
+      const maxRetries = 3;
 
-          // Draw white border frame with rounded corners
-          ctx.fillStyle = "#FFFFFF";
-          drawRoundedRect(
-            photoSection.x,
-            frameY,
-            photoSection.width,
-            photoFrameHeight,
-            frameRadius
-          );
-          ctx.fill();
-
-          // Draw photo inside with small margin (for white border)
-          const innerMargin = borderWidth;
-
-          // Need to clip the photo to rounded corners
-          ctx.save();
-          ctx.beginPath();
-          drawRoundedRect(
-            photoSection.x + innerMargin,
-            frameY + innerMargin,
-            photoSection.width - innerMargin * 2,
-            photoFrameHeight - innerMargin * 2,
-            Math.max(1, frameRadius - 2)
-          );
-          ctx.clip();
-
-          // Calculate aspect ratio scaling
-          const imgAspect = img.width / img.height;
-          const frameAspect =
-            (photoSection.width - innerMargin * 2) /
-            (photoFrameHeight - innerMargin * 2);
-
-          let drawWidth,
-            drawHeight,
-            offsetX = 0,
-            offsetY = 0;
-
-          if (imgAspect > frameAspect) {
-            // Image is wider than frame - scale by height and center horizontally
-            drawHeight = photoFrameHeight - innerMargin * 2;
-            drawWidth = drawHeight * imgAspect;
-            offsetX = (photoSection.width - innerMargin * 2 - drawWidth) / 2;
-          } else {
-            // Image is taller than frame - scale by width and center vertically
-            drawWidth = photoSection.width - innerMargin * 2;
-            drawHeight = drawWidth / imgAspect;
-            offsetY = (photoFrameHeight - innerMargin * 2 - drawHeight) / 2;
-          }
-
-          // Draw the image centered and filling the frame
-          ctx.drawImage(
-            img,
-            photoSection.x + innerMargin + offsetX,
-            frameY + innerMargin + offsetY,
-            drawWidth,
-            drawHeight
-          );
-
-          ctx.restore();
-
-          // Draw white border outline
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = borderWidth;
-          drawRoundedRect(
-            photoSection.x,
-            frameY,
-            photoSection.width,
-            photoFrameHeight,
-            frameRadius
-          );
-          ctx.stroke();
-
-          loadedCount++;
-
-          // Process next photo
-          drawNextPhoto(index + 1);
-        };
-
-        img.onerror = (err) => {
-          console.error(`Failed to load image ${index}:`, err);
-          drawNextPhoto(index + 1);
-        };
-
-        img.src = capturedPhotos[index];
-      };
-
-      // Draw footer once all photos are loaded
-      const drawFooter = () => {
-        const footerY = stripHeight - headerFooterHeight * 0.7;
-
-        // Draw footer content
-        ctx.fillStyle = "#FFFFFF";
-        ctx.font = "bold 16px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("PixSnap", stripWidth / 2, footerY + 20);
-
-        ctx.font = "12px sans-serif";
-        ctx.fillText(
-          new Date().toLocaleDateString(),
-          stripWidth / 2,
-          footerY + 40
-        );
-      };
-
-      const finishDownload = () => {
+      while (retryCount < maxRetries) {
         try {
-          // Draw footer
-          drawFooter();
+          const imageData = canvas.toDataURL("image/jpeg", imageQuality);
+          setCapturedPhotos((prev) => {
+            const newPhotos = [...prev];
+            newPhotos[photoIndex] = imageData;
+            return newPhotos;
+          });
 
-          // Convert canvas to data URL
-          const dataUrl = canvas.toDataURL("image/jpeg", 1.0);
-
-          // Create download link
-          const link = document.createElement("a");
-          const timestamp = new Date().getTime();
-          link.download = `pixsnap-${timestamp}.jpg`;
-          link.href = dataUrl;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-
-          console.log("Photo strip downloaded successfully");
-        } catch (err) {
-          console.error("Error creating download:", err);
-          alert("Sorry, there was an error creating your download.");
+          // Cache the captured photo
+          setPhotoCache((prev) => {
+            const newCache = new Map(prev);
+            newCache.set(photoIndex, imageData);
+            return newCache;
+          });
+          break;
+        } catch (error) {
+          retryCount++;
+          if (retryCount === maxRetries) {
+            throw new Error("Failed to capture photo after multiple attempts");
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
-      };
+      }
 
-      // Start drawing process with the first photo
-      drawNextPhoto(0);
+      // Move to next photo
+      const nextPhotoIndex = photoIndex + 1;
+      console.log(`Setting currentPhotoIndex to ${nextPhotoIndex}`);
+      setCurrentPhotoIndex(nextPhotoIndex);
+
+      if (nextPhotoIndex < 4) {
+        console.log(`Planning to take next photo at index ${nextPhotoIndex}`);
+        // We have more photos to take - wait a bit and start next countdown
+        const nextPhotoTimeout = setTimeout(() => {
+          console.log(
+            `Starting countdown for next photo at index ${nextPhotoIndex}`
+          );
+          if (cameraActive) {
+            startCountdown(nextPhotoIndex);
+          } else {
+            console.log("Camera became inactive, canceling next photo");
+            setPhotoSessionActive(false);
+          }
+        }, 1500);
+      } else {
+        // We're done with the session
+        console.log("COMPLETE: All 4 photos taken, ending session");
+        setPhotoSessionActive(false);
+      }
     } catch (error) {
-      console.error("Error in downloadPhotoStrip:", error);
-      alert("Sorry, there was an error processing your photo strip.");
+      console.error("Error capturing photo:", error);
+      // Handle error gracefully
+      setPhotoSessionActive(false);
+      // Show error to user
     }
+  };
+
+  // Add loadImage helper function
+  const loadImage = (src) => {
+    return new Promise((resolve, reject) => {
+      // Use HTMLImageElement instead of Image constructor to avoid conflict with lucide-react
+      const img = document.createElement("img");
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  };
+
+  const downloadPhotoStrip = async () => {
+    setDownloading(true);
+    setDownloadProgress(10); // Show initial progress
+
+    try {
+      if (!photoStripRef.current || capturedPhotos.length < 4) {
+        throw new Error("Photo strip is not ready");
+      }
+
+      // Update progress
+      setDownloadProgress(30);
+
+      // Use html-to-image to capture the exact photo strip element
+      const dataUrl = await htmlToImage.toPng(photoStripRef.current, {
+        quality: imageQuality,
+        pixelRatio: 2, // Higher resolution
+        style: {
+          // Ensure the element is rendered with proper dimensions for capture
+          transform: "scale(1)",
+          transformOrigin: "top left",
+        },
+      });
+
+      // Update progress
+      setDownloadProgress(80);
+
+      // Download the image
+      const link = document.createElement("a");
+      link.download = `pixsnap-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      setDownloadProgress(100);
+    } catch (error) {
+      console.error("Error generating photo strip:", error);
+      // Show error to user
+    } finally {
+      setTimeout(() => {
+        setDownloading(false);
+        setDownloadProgress(0);
+      }, 500);
+    }
+  };
+
+  // Helper function for drawing rounded rectangles
+  const roundedRect = (ctx, x, y, width, height, radius) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
   };
 
   const resetPhotoBooth = () => {
@@ -660,6 +532,7 @@ function CameraSection() {
 
     return (
       <div
+        ref={photoStripRef}
         className="photo-strip-container relative rounded-xl overflow-hidden flex flex-col"
         style={{
           backgroundColor: currentColor.color,
@@ -969,6 +842,27 @@ function CameraSection() {
           </div>
         </div>
       </div>
+
+      {/* Add loading indicator for download */}
+      {downloading && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full flex flex-col items-center">
+            <Loader className="animate-spin mb-4 text-purple-600" size={40} />
+            <p className="text-gray-800 text-lg mb-3">
+              Generating your photo strip...
+            </p>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-purple-600 h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${downloadProgress}%` }}
+              ></div>
+            </div>
+            <p className="text-gray-600 text-sm mt-2">
+              Please wait, this may take a moment
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
