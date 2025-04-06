@@ -62,15 +62,15 @@ const PhotoStripPreview = ({
             }`}
           >
             <span
-              className={`text-xs font-medium ${
-                isDarkDesign ? "text-white" : "text-gray-800"
+              className={`text-xs font-bold ${
+                isDarkDesign ? "text-card-foreground" : "text-gray-800"
               }`}
             >
-              PixSnap
+              PixSnap Photo Booth
             </span>
             <p
               className={`text-[10px] sm:text-xs font-medium ${
-                isDarkDesign ? "text-white/90" : "text-gray-700"
+                isDarkDesign ? "text-card-foreground" : "text-gray-700"
               }`}
             >
               {new Date().toLocaleDateString()}

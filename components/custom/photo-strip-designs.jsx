@@ -1,4 +1,6 @@
 import React from "react";
+import { motion } from "framer-motion";
+import { cn } from "../../lib/utils";
 
 // Design categories with various options
 const photoStripDesigns = {
@@ -213,20 +215,21 @@ const DesignCategorySelector = ({
   onSelectDesign,
 }) => {
   return (
-    <div className="design-category mb-4">
-      <h3 className="text-sm font-medium text-gray-700 mb-2 capitalize">
-        {category}
-      </h3>
-      <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
-        {designs.map((design) => (
-          <div
-            key={design.id}
-            className={`aspect-[9/16] rounded-md overflow-hidden cursor-pointer transition-all hover:scale-105 ${
-              activeDesignId === design.id
-                ? "ring-2 ring-purple-600 ring-offset-1 scale-105 z-10"
-                : "ring-1 ring-gray-200"
-            }`}
+    <div className="px-2 pb-4">
+      <h3 className="text-lg font-semibold uppercase pb-2 mt-5">{category}</h3>
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-5">
+        {designs.map((design, index) => (
+          <motion.div
+            key={`${category}-${design.id}-${index}`}
+            className={cn(
+              "group relative aspect-[9/16] rounded-lg overflow-hidden cursor-pointer transition-all duration-300",
+              "ring-1 ring-border hover:ring-2 hover:ring-primary",
+              activeDesignId === design.id &&
+                "ring-2 ring-primary ring-offset-2 ring-offset-background scale-[1.02] z-10"
+            )}
             onClick={() => onSelectDesign(design.id)}
+            whileHover={{ scale: activeDesignId === design.id ? 1.02 : 1.05 }}
+            whileTap={{ scale: 0.98 }}
           >
             {/* Design thumbnail */}
             <div
@@ -241,31 +244,42 @@ const DesignCategorySelector = ({
               }}
             >
               {/* Sample photo frame placeholders */}
-              <div className="absolute inset-0 p-1 flex flex-col justify-around">
-                {[1, 2, 3, 4].map((num) => (
+              <div className="absolute inset-0 p-1.5 flex flex-col justify-around">
+                {Array.from({ length: 4 }, (_, i) => (
                   <div
-                    key={num}
-                    className="bg-white/90 rounded-sm border border-white"
+                    key={`frame-${category}-${design.id}-${i}`}
+                    className="bg-white/90 rounded-sm border border-white/50"
                     style={{ height: "20%" }}
                   />
                 ))}
-
-                {/* Design name tooltip on hover */}
-                <div className="absolute bottom-0 left-0 right-0 text-center text-[8px] font-medium bg-black/50 text-white py-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {design.label}
-                </div>
-
-                {/* Selected indicator */}
-                {activeDesignId === design.id && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="bg-purple-600/80 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                      ✓
-                    </span>
-                  </div>
-                )}
               </div>
+
+              {/* Design label tooltip */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <p className="text-[10px] sm:text-xs text-white font-medium text-center">
+                  {design.label}
+                </p>
+              </div>
+
+              {/* Active indicator */}
+              {activeDesignId === design.id && (
+                <div className="absolute top-1.5 right-1.5 size-4 bg-primary text-white rounded-full flex items-center justify-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="size-3"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              )}
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>
@@ -275,7 +289,7 @@ const DesignCategorySelector = ({
 // Main design selector component
 const PhotoStripDesignSelector = ({ activeDesignId, onSelectDesign }) => {
   return (
-    <div className="photo-strip-design-selector">
+    <div>
       {Object.entries(photoStripDesigns).map(([category, designs]) => (
         <DesignCategorySelector
           key={category}

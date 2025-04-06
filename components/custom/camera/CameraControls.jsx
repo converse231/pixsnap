@@ -1,6 +1,8 @@
 import React from "react";
 import { Clock, Palette, XCircle } from "lucide-react";
 import { getDesignById } from "../photo-strip-designs";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const CameraControls = ({
   photoInterval,
@@ -13,55 +15,60 @@ const CameraControls = ({
   intervalOptions,
 }) => {
   return (
-    <div className="bg-gray-900 dark:bg-gray-800 px-3 py-3 sm:px-5 sm:py-4 flex flex-wrap md:flex-nowrap gap-3 sm:gap-4 items-center justify-between">
+    <div className="bg-card backdrop-blur-md border-t px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap md:flex-nowrap gap-3 sm:gap-4 items-center justify-between">
       {/* Design Selector Button */}
       <div className="flex items-center gap-2 order-1">
-        <Palette size={16} className="text-white/80 hidden sm:inline" />
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setShowDesignSelector(true)}
-          className="text-white/90 text-xs sm:text-sm font-medium px-3 py-1.5 rounded-md bg-white/10 hover:bg-white/15 transition-colors flex items-center gap-1.5"
+          className="gap-2"
         >
-          <span>Design:</span>
-          <span className="font-semibold">
-            {getDesignById(stripDesign).label}
+          <Palette className="size-4 text-muted-foreground" />
+          <span className="text-xs sm:text-sm font-medium">
+            Design:{" "}
+            <span className="font-semibold">
+              {getDesignById(stripDesign).label}
+            </span>
           </span>
-        </button>
+        </Button>
       </div>
 
-      {/* Time Interval */}
-      <div className="flex items-center gap-2 order-2 md:ml-2">
-        <Clock size={16} className="text-white/80 hidden sm:inline" />
-        <span className="text-white/90 text-xs sm:text-sm font-medium">
-          Countdown:
-        </span>
-        <div className="flex bg-white/10 rounded-md overflow-hidden">
-          {intervalOptions.map((option) => (
-            <button
-              key={option.value}
-              className={`px-2.5 sm:px-3.5 py-1.5 text-xs sm:text-sm transition ${
-                photoInterval === option.value
-                  ? "bg-purple-600 text-white"
-                  : "text-white/80 hover:bg-white/15"
-              }`}
-              onClick={() => setPhotoInterval(option.value)}
-              disabled={photoSessionActive || countdownActive}
-            >
-              {option.label}
-            </button>
-          ))}
+      {/* Interval Selector */}
+      <div className="flex items-center gap-2 order-2">
+        <div className="flex items-center gap-2">
+          <Clock className="size-4 text-muted-foreground" />
+          <div className="flex gap-1">
+            {intervalOptions.map((option) => (
+              <Button
+                key={option.value}
+                variant={photoInterval === option.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPhotoInterval(option.value)}
+                disabled={photoSessionActive || countdownActive}
+                className={cn(
+                  "text-xs px-3 min-w-[40px]",
+                  photoInterval === option.value && "shadow-sm"
+                )}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Reset Button */}
-      <div className="flex items-center order-3 sm:ml-auto">
-        <button
+      <div className="order-3">
+        <Button
+          variant="outline"
+          size="sm"
           onClick={resetPhotoBooth}
-          className="text-white/90 text-xs sm:text-sm font-medium bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
-          title="Reset photo booth to defaults"
+          className="gap-2 text-destructive hover:text-destructive-foreground hover:bg-destructive"
         >
-          <XCircle size={14} className="sm:size-16 md:size-5 text-red-400" />
-          <span>Reset</span>
-        </button>
+          <XCircle className="size-4" />
+          <span className="text-xs sm:text-sm font-medium">Reset</span>
+        </Button>
       </div>
     </div>
   );

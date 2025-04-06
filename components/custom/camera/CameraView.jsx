@@ -1,5 +1,14 @@
 import React from "react";
-import { Camera, XCircle, Repeat, Expand, Loader } from "lucide-react";
+import {
+  Camera,
+  XCircle,
+  Repeat,
+  Expand,
+  Loader,
+  X,
+  Maximize,
+  Minimize,
+} from "lucide-react";
 import { motion } from "framer-motion";
 import ActionButton from "./ActionButton";
 
@@ -22,13 +31,19 @@ const CameraView = ({
   handleVideoLoaded,
 }) => {
   return (
-    <div className="relative flex-1 aspect-video flex items-center justify-center">
+    <div
+      className={`relative flex-1 aspect-video flex items-center justify-center ${
+        isFullScreen ? "h-full" : ""
+      }`}
+    >
       {/* Video Element for Camera Stream */}
       {cameraActive && (
         <>
           <video
             ref={videoRef}
-            className="absolute inset-0 w-full h-full object-cover"
+            className={`absolute inset-0 w-full h-full object-cover ${
+              isFullScreen ? "rounded-none" : ""
+            }`}
             autoPlay
             playsInline
             muted
@@ -59,7 +74,11 @@ const CameraView = ({
 
       {/* Camera Placeholder - shown when camera is not active */}
       {!cameraActive && !loading && (
-        <div className="flex flex-col items-center justify-center text-gray-500 p-4 text-center h-[300px] sm:h-[400px] md:h-[500px]">
+        <div
+          className={`flex flex-col items-center justify-center text-gray-500 p-4 text-center ${
+            isFullScreen ? "h-full" : "h-[300px] sm:h-[400px] md:h-[500px]"
+          }`}
+        >
           <div className="bg-gray-900/50 p-6 sm:p-8 rounded-xl max-w-md">
             <div className="mb-4 sm:mb-6">
               <Camera className="w-12 h-12 sm:w-16 sm:h-16 mx-auto text-gray-400" />
@@ -99,7 +118,11 @@ const CameraView = ({
 
       {/* Loading state */}
       {loading && (
-        <div className="flex flex-col items-center justify-center text-gray-500 h-[300px] sm:h-[400px] md:h-[500px]">
+        <div
+          className={`flex flex-col items-center justify-center text-gray-500 ${
+            isFullScreen ? "h-full" : "h-[300px] sm:h-[400px] md:h-[500px]"
+          }`}
+        >
           <div className="animate-spin mb-4">
             <Loader size={32} className="sm:size-40 md:size-48" />
           </div>
@@ -157,7 +180,11 @@ const CameraView = ({
         className="absolute top-3 sm:top-4 right-3 sm:right-4 bg-black/60 rounded-md p-2 sm:p-2.5 text-white/90 hover:text-white hover:bg-black/80 transition z-10"
         title={isFullScreen ? "Exit full screen" : "Full screen"}
       >
-        <Expand size={16} className="sm:size-18 md:size-5" />
+        {isFullScreen ? (
+          <Minimize size={16} className="sm:size-18 md:size-5" />
+        ) : (
+          <Maximize size={16} className="sm:size-18 md:size-5" />
+        )}
       </button>
     </div>
   );

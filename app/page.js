@@ -26,7 +26,6 @@ export default function Home() {
         <WelcomeBanner />
 
         <div className="mt-4 flex items-center justify-between">
-          <h1 className="text-white text-4xl font-bold">PixSnap</h1>
           <div className="bg-white/10 backdrop-blur-sm py-2 px-4 rounded-lg">
             {/* <span className="text-white/80 text-sm">
               Ready to capture moments

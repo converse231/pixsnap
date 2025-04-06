@@ -35,7 +35,7 @@ function CameraSection() {
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [imageQuality, setImageQuality] = useState(0.8);
-  const [photoCache, setPhotoCache] = useState(new Map());
+  const [photoCache, setPhotoCache] = useState({});
 
   // Refs
   const videoRef = useRef(null);
@@ -380,12 +380,11 @@ function CameraSection() {
             return newPhotos;
           });
 
-          // Cache the captured photo
-          setPhotoCache((prev) => {
-            const newCache = new Map(prev);
-            newCache.set(photoIndex, imageData);
-            return newCache;
-          });
+          // Cache the captured photo using an object instead of Map
+          setPhotoCache((prev) => ({
+            ...prev,
+            [photoIndex]: imageData,
+          }));
           break;
         } catch (error) {
           retryCount++;
@@ -474,8 +473,52 @@ function CameraSection() {
 
   // Toggle fullscreen mode
   const toggleFullScreen = () => {
-    setIsFullScreen(!isFullScreen);
+    if (!document.fullscreenElement) {
+      // Enter fullscreen
+      const element = document.documentElement;
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      } else if (element.webkitRequestFullscreen) {
+        element.webkitRequestFullscreen();
+      } else if (element.msRequestFullscreen) {
+        element.msRequestFullscreen();
+      }
+      setIsFullScreen(true);
+    } else {
+      // Exit fullscreen
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      } else if (document.msExitFullscreen) {
+        document.msExitFullscreen();
+      }
+      setIsFullScreen(false);
+    }
   };
+
+  // Handle fullscreen change events
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener(
+        "webkitfullscreenchange",
+        handleFullscreenChange
+      );
+      document.removeEventListener(
+        "msfullscreenchange",
+        handleFullscreenChange
+      );
+    };
+  }, []);
 
   // Reset photo booth to defaults
   const resetPhotoBooth = () => {
@@ -494,27 +537,31 @@ function CameraSection() {
   };
 
   return (
-    <div className="w-full mx-auto px-3 md:px-5 sm:px-4 mt-4 sm:mt-8 max-w-7xl">
-      {/* Title and Introduction */}
-      <div className="mb-4 sm:mb-6 text-center">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 mb-2">
-          PixSnap Photo Booth
-        </h2>
-        <p className="text-white/70 text-sm sm:text-base max-w-2xl mx-auto">
-          Take fun photo strips with your camera! Perfect for memories, parties,
-          or just for fun.
-        </p>
-      </div>
+    <div
+      className={`mx-auto w-full ${isFullScreen ? "fixed inset-0 z-50" : ""}`}
+    >
+      {/* Title and Introduction - Hide in fullscreen */}
+      {!isFullScreen && (
+        <div className="mb-4 sm:mb-6 text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 mb-2">
+            PixSnap Photo Booth
+          </h2>
+          <p className="text-white/70 text-sm sm:text-base max-w-2xl mx-auto">
+            Take fun photo strips with your camera! Perfect for memories,
+            parties, or just for fun.
+          </p>
+        </div>
+      )}
 
       <div
         className={`flex ${
-          isFullScreen ? "flex-col" : "flex-col lg:flex-row"
+          isFullScreen ? "flex-col h-full" : "flex-col lg:flex-row"
         } gap-4 sm:gap-6 items-start`}
       >
         {/* Camera Preview Section */}
         <div
           className={`w-full ${
-            isFullScreen ? "" : "lg:w-[70%]"
+            isFullScreen ? "h-full" : "lg:w-full"
           } bg-black rounded-xl overflow-hidden border-4 border-white/20 shadow-2xl flex flex-col`}
         >
           {/* Camera View Component */}
@@ -550,24 +597,26 @@ function CameraSection() {
           />
         </div>
 
-        {/* Photo Strip Preview - Vertical Format */}
-        <div
-          className={`w-full ${
-            isFullScreen
-              ? "max-w-[200px] mx-auto mt-6"
-              : "lg:w-[30%] lg:sticky lg:top-4"
-          } flex flex-row lg:flex-col items-center justify-center lg:justify-start gap-4 sm:gap-5 mt-4 sm:mt-5 lg:mt-0`}
-        >
-          {/* Photo Strip Preview Component */}
-          <div className="w-full max-w-[180px] sm:max-w-[200px] lg:max-w-[250px]">
-            <PhotoStripPreview
-              capturedPhotos={capturedPhotos}
-              stripDesign={stripDesign}
-              photoStripRef={photoStripRef}
-              downloadPhotoStrip={downloadPhotoStrip}
-            />
+        {/* Photo Strip Preview - Hide in fullscreen */}
+        {!isFullScreen && (
+          <div
+            className={`w-full ${
+              isFullScreen
+                ? "max-w-[200px] mx-auto mt-6"
+                : "lg:w-fit lg:sticky lg:top-4"
+            } flex flex-row lg:flex-col items-center justify-center lg:justify-start gap-4 sm:gap-5 mt-4 sm:mt-5 lg:mt-0`}
+          >
+            {/* Photo Strip Preview Component */}
+            <div className="w-full max-w-[180px] sm:max-w-[200px] lg:max-w-[250px]">
+              <PhotoStripPreview
+                capturedPhotos={capturedPhotos}
+                stripDesign={stripDesign}
+                photoStripRef={photoStripRef}
+                downloadPhotoStrip={downloadPhotoStrip}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Design Selector Modal Component */}
